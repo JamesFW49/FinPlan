@@ -91,6 +91,29 @@ debt's payoff trajectory as its own colour-coded line, with a legend \u2014
 the same style as the Investments page already uses for individual
 holdings.
 
+## iPhone-friendly navigation
+
+On narrow phone screens, the top navigation automatically switches to
+icon-only tabs (no horizontal scrolling needed) and moves the Net
+Worth/Cash summary to its own row underneath, so every tab \u2014 Dashboard,
+Transactions, Debt, Investments, Future, Settings \u2014 is visible at once in
+portrait orientation without needing to rotate the phone. On wider screens
+(tablets, computers) the full labels and single-row layout remain as
+before.
+
+## Interactive projection cards on Future and Debt
+
+On the Future page, both "Projected in Xyr" cards are tappable, each opening
+the same year picker used on Investments \u2014 pick any year independently for
+each card, and the milestones table and charts extend to cover whichever
+year you choose.
+
+On the Debt page, the "Debt-Free ETA" card is tappable too. By default it
+shows the automatically calculated payoff date. Tap it to instead pick a
+specific year and see your remaining total debt balance at that point \u2014
+useful if a debt won't be paid off within the normal forecast window. The
+picker includes a "Back to automatic Debt-Free ETA" option to switch back.
+
 ## Adjustable projection horizon on Investments
 
 The "10-yr Projection" card on the Investments page is now tappable \u2014 tap

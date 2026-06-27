@@ -787,7 +787,11 @@ function YearPickerModal(props) {
           style: { background: C.purple, color: "#fff", border: "none", borderRadius: 7, padding: "10px 18px", fontWeight: 800, cursor: "pointer", fontSize: 13 },
         }, "Use this")
       )
-    )
+    ),
+    props.onUseAuto ? h("button", {
+      onClick: props.onUseAuto,
+      style: { width: "100%", background: "transparent", border: "1px solid " + C.border, color: C.textMid, borderRadius: 7, padding: "10px", fontSize: 13, cursor: "pointer", marginTop: 14 },
+    }, "\u21BA Back to automatic Debt-Free ETA") : null
   );
 }
 
@@ -1130,6 +1134,12 @@ function Debt(props) {
   const editId = editIdState[0], setEditId = editIdState[1];
   const formState = useState({ name: "", balance: "", rate: "", payment: "" });
   const form = formState[0], setForm = formState[1];
+  const debtCardModeState = useState("eta"); // "eta" | "atYear"
+  const debtCardMode = debtCardModeState[0], setDebtCardMode = debtCardModeState[1];
+  const debtCardYearState = useState(5);
+  const debtCardYear = debtCardYearState[0], setDebtCardYear = debtCardYearState[1];
+  const showDebtYearPickerState = useState(false);
+  const showDebtYearPicker = showDebtYearPickerState[0], setShowDebtYearPicker = showDebtYearPickerState[1];
 
   const openAdd = () => {
     setEditId(null);
@@ -1165,8 +1175,9 @@ function Debt(props) {
 
   const totalDebt = data.debts.reduce((s, x) => s + x.balance, 0);
   const totalPay = data.debts.reduce((s, x) => s + x.payment, 0);
-  const fc60 = useMemo(() => buildForecast(data, 60), [data]);
-  const debtFc = useMemo(() => buildDebtForecast(data.debts, 60), [data.debts]);
+  const debtHorizonMonths = Math.max(60, debtCardYear * 12);
+  const fc60 = useMemo(() => buildForecast(data, debtHorizonMonths), [data, debtHorizonMonths]);
+  const debtFc = useMemo(() => buildDebtForecast(data.debts, debtHorizonMonths), [data.debts, debtHorizonMonths]);
 
   const payoffETA = (d) => {
     let bal = d.balance, m = 0;
@@ -1182,7 +1193,9 @@ function Debt(props) {
   };
 
   const debtFreeRow = fc60.find(r => r.debt < 100);
-  const debtFreeLabel = debtFreeRow ? debtFreeRow.label : "60mo+";
+  const debtFreeLabel = debtFreeRow ? debtFreeRow.label : debtHorizonMonths + "mo+";
+  const balanceAtYear = (fc60[debtCardYear * 12] || {}).debt;
+  const balanceAtYearLabel = balanceAtYear === undefined ? "\u2014" : gbp(balanceAtYear, true);
 
   const rows = data.debts.map(d =>
     h("tr", { key: d.id },
@@ -1216,7 +1229,17 @@ function Debt(props) {
     h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 } },
       h(KPICard, { label: "Total Debt", value: gbp(totalDebt, true), sub: data.debts.length + " debts tracked", accent: C.red, icon: "\u25BC" }),
       h(KPICard, { label: "Monthly Payments", value: gbp(totalPay, true), sub: "Combined outgoing", accent: C.amber, icon: "\u2193" }),
-      h(KPICard, { label: "Debt-Free ETA", value: debtFreeLabel, sub: "At current payment rates", accent: C.green, icon: "\u2713" })
+      debtCardMode === "eta"
+        ? h(KPICard, {
+            label: "Debt-Free ETA", value: debtFreeLabel,
+            sub: "At current payment rates \u2014 tap to view a chosen year instead", accent: C.green, icon: "\u2713",
+            onClick: () => setShowDebtYearPicker(true),
+          })
+        : h(KPICard, {
+            label: "Balance in " + debtCardYear + "yr", value: balanceAtYearLabel,
+            sub: "Tap to change \u2014 or pick \"Back to auto ETA\" in the picker", accent: C.green, icon: "\u25C8",
+            onClick: () => setShowDebtYearPicker(true),
+          })
     ),
     h(Panel, null,
       h(PanelTitle, null, "Debt paydown \u2014 60-month projection (total)"),
@@ -1246,7 +1269,13 @@ function Debt(props) {
         )
       )
     ),
-    modalContent
+    modalContent,
+    showDebtYearPicker ? h(YearPickerModal, {
+      years: debtCardYear,
+      onPick: (y) => { setDebtCardYear(y); setDebtCardMode("atYear"); setShowDebtYearPicker(false); },
+      onClose: () => setShowDebtYearPicker(false),
+      onUseAuto: () => { setDebtCardMode("eta"); setShowDebtYearPicker(false); },
+    }) : null
   );
 }
 
@@ -1671,21 +1700,29 @@ function LockScreen(props) {
 // ─── PAGE: FUTURE ──────────────────────────────────────────────────────────────
 function Future(props) {
   const data = props.data;
+  const yearAState = useState(10);
+  const yearA = yearAState[0], setYearA = yearAState[1];
+  const yearBState = useState(30);
+  const yearB = yearBState[0], setYearB = yearBState[1];
+  const pickerForState = useState(null); // "A" | "B" | null
+  const pickerFor = pickerForState[0], setPickerFor = pickerForState[1];
 
-  // Build a full 30-year (360-month) forecast using the same engine as everywhere
-  // else, then sample it yearly for a readable long-horizon chart — 360 individual
-  // monthly points would be unreadable on a chart this wide.
-  const fc360 = useMemo(() => buildForecast(data, 360), [data]);
+  // Build a forecast covering at least the larger of the two chosen projection
+  // years (plus the fixed 30-year milestone table/charts below), sampled yearly
+  // for a readable long-horizon chart — showing every individual month would be
+  // unreadable on a chart this wide.
+  const horizonYears = Math.max(30, yearA, yearB);
+  const fc360 = useMemo(() => buildForecast(data, horizonYears * 12), [data, horizonYears]);
   const yearly = useMemo(() => {
     const rows = [];
-    for (let y = 0; y <= 30; y++) {
+    for (let y = 0; y <= horizonYears; y++) {
       const row = fc360[y * 12];
       if (row) rows.push(Object.assign({}, row, { label: y === 0 ? "Now" : y + "yr" }));
     }
     return rows;
-  }, [fc360]);
+  }, [fc360, horizonYears]);
 
-  const milestoneYears = [1, 2, 3, 5, 10, 15, 20, 25, 30];
+  const milestoneYears = Array.from(new Set([1, 2, 3, 5, 10, 15, 20, 25, 30, yearA, yearB].filter(y => y <= horizonYears))).sort((a, b) => a - b);
   const milestones = milestoneYears.map(y => ({ year: y, row: fc360[y * 12] })).filter(m => m.row);
 
   const totalDebt = data.debts.reduce((s, x) => s + x.balance, 0);
@@ -1693,22 +1730,30 @@ function Future(props) {
   const netWorthNow = data.cashBalance + totalInv - totalDebt;
 
   const debtFreeRow = fc360.find(r => r.debt < 100);
-  const debtFreeLabel = debtFreeRow ? (fc360.indexOf(debtFreeRow) < 12 ? fc360.indexOf(debtFreeRow) + "mo" : (fc360.indexOf(debtFreeRow) / 12).toFixed(1) + "yr") : "30yr+";
+  const debtFreeLabel = debtFreeRow ? (fc360.indexOf(debtFreeRow) < 12 ? fc360.indexOf(debtFreeRow) + "mo" : (fc360.indexOf(debtFreeRow) / 12).toFixed(1) + "yr") : horizonYears + "yr+";
 
   return h("div", { style: { display: "flex", flexDirection: "column", gap: 20 } },
     h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 } },
       h(KPICard, { label: "Net Worth Now", value: gbp(netWorthNow, true), sub: "Starting point", accent: C.green, icon: "\u25C8" }),
-      h(KPICard, { label: "Projected in 10yr", value: gbp((fc360[120] || {}).netWorth || 0, true), sub: "At current rates", accent: C.amber, icon: "\u2197" }),
-      h(KPICard, { label: "Projected in 30yr", value: gbp((fc360[360] || {}).netWorth || 0, true), sub: "Full projection horizon", accent: C.purple, icon: "\u25C6" }),
+      h(KPICard, {
+        label: "Projected in " + yearA + "yr", value: gbp((fc360[yearA * 12] || {}).netWorth || 0, true),
+        sub: "At current rates \u2014 tap to change", accent: C.amber, icon: "\u2197",
+        onClick: () => setPickerFor("A"),
+      }),
+      h(KPICard, {
+        label: "Projected in " + yearB + "yr", value: gbp((fc360[yearB * 12] || {}).netWorth || 0, true),
+        sub: "Tap to change horizon", accent: C.purple, icon: "\u25C6",
+        onClick: () => setPickerFor("B"),
+      }),
       h(KPICard, { label: "Debt-Free", value: debtFreeLabel, sub: "At current payment rates", accent: C.red, icon: "\u2713" })
     ),
 
     h(Panel, null,
-      h(PanelTitle, null, "Net worth \u2014 30-year projection"),
+      h(PanelTitle, null, "Net worth \u2014 " + horizonYears + "-year projection"),
       h("div", { style: { color: C.textLo, fontSize: 12, marginBottom: 14 } },
         "Assumes your current income, expenses, debt payments, and investment contributions and returns stay constant. Real life won't be this smooth \u2014 use this as a directional guide, not a guarantee."
       ),
-      h(MiniChart, { data: yearly, height: 280, xLabelEvery: 2, yFormatter: v => gbp(v, true), series: [{ key: "netWorth", color: C.green, type: "area", name: "Net Worth" }] })
+      h(MiniChart, { data: yearly, height: 280, xLabelEvery: Math.max(1, Math.round(yearly.length / 15)), yFormatter: v => gbp(v, true), series: [{ key: "netWorth", color: C.green, type: "area", name: "Net Worth" }] })
     ),
 
     h(Panel, null,
@@ -1739,18 +1784,23 @@ function Future(props) {
 
     h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 14 } },
       h(Panel, null,
-        h(PanelTitle, null, "Investments \u2014 30-year growth"),
-        h(MiniChart, { data: yearly, height: 200, xLabelEvery: 3, yFormatter: v => gbp(v, true), series: [{ key: "investments", color: C.amber, type: "area", name: "Investments" }] })
+        h(PanelTitle, null, "Investments \u2014 " + horizonYears + "-year growth"),
+        h(MiniChart, { data: yearly, height: 200, xLabelEvery: Math.max(1, Math.round(yearly.length / 10)), yFormatter: v => gbp(v, true), series: [{ key: "investments", color: C.amber, type: "area", name: "Investments" }] })
       ),
       h(Panel, null,
-        h(PanelTitle, null, "Debt \u2014 30-year payoff"),
-        h(MiniChart, { data: yearly, height: 200, xLabelEvery: 3, yFormatter: v => gbp(v, true), series: [{ key: "debt", color: C.red, type: "area", name: "Debt" }] })
+        h(PanelTitle, null, "Debt \u2014 " + horizonYears + "-year payoff"),
+        h(MiniChart, { data: yearly, height: 200, xLabelEvery: Math.max(1, Math.round(yearly.length / 10)), yFormatter: v => gbp(v, true), series: [{ key: "debt", color: C.red, type: "area", name: "Debt" }] })
       ),
       h(Panel, null,
-        h(PanelTitle, null, "Cash \u2014 30-year balance"),
-        h(MiniChart, { data: yearly, height: 200, xLabelEvery: 3, yFormatter: v => gbp(v, true), series: [{ key: "cash", color: C.blue, type: "line", name: "Cash" }] })
+        h(PanelTitle, null, "Cash \u2014 " + horizonYears + "-year balance"),
+        h(MiniChart, { data: yearly, height: 200, xLabelEvery: Math.max(1, Math.round(yearly.length / 10)), yFormatter: v => gbp(v, true), series: [{ key: "cash", color: C.blue, type: "line", name: "Cash" }] })
       )
-    )
+    ),
+    pickerFor ? h(YearPickerModal, {
+      years: pickerFor === "A" ? yearA : yearB,
+      onPick: (y) => { if (pickerFor === "A") setYearA(y); else setYearB(y); setPickerFor(null); },
+      onClose: () => setPickerFor(null),
+    }) : null
   );
 }
 
@@ -1815,6 +1865,9 @@ function App() {
   const unlocked = unlockedState[0], setUnlocked = unlockedState[1];
   const pendingCloseState = useState(null); // month key awaiting close-out, or null
   const pendingClose = pendingCloseState[0], setPendingClose = pendingCloseState[1];
+  const navMeasured = useMeasuredWidth();
+  const navRef = navMeasured[0], navWidth = navMeasured[1];
+  const compact = navWidth < 640; // narrow phones: icon-only tabs, summary on its own row
 
   // Detect a new calendar month has started since we last recorded a "lastClosedMonth".
   // If so, prompt to close out the previous month once the app has unlocked.
@@ -1935,16 +1988,21 @@ function App() {
   const navButtons = PAGES.map(p =>
     h("button", {
       key: p.id, onClick: () => setPage(p.id),
+      title: compact ? p.label : undefined,
       style: {
         background: "none", border: "none",
         color: page === p.id ? C.green : C.textMid,
         borderBottom: page === p.id ? "2px solid " + C.green : "2px solid transparent",
-        padding: "16px 16px", fontSize: 13, fontWeight: page === p.id ? 700 : 400,
+        padding: compact ? "14px 9px" : "16px 16px",
+        fontSize: compact ? 15 : 13, fontWeight: page === p.id ? 700 : 400,
         cursor: "pointer", letterSpacing: 0.2,
         display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
+        flex: compact ? "1 1 0" : "0 0 auto",
+        justifyContent: "center",
       },
     },
-      h("span", { style: { fontSize: 11, opacity: 0.7 } }, p.icon), p.label
+      h("span", { style: { fontSize: compact ? 16 : 11, opacity: compact ? 1 : 0.7 } }, p.icon),
+      compact ? null : p.label
     )
   );
 
@@ -1961,17 +2019,23 @@ function App() {
   }
 
   return h("div", { style: { minHeight: "100vh", background: C.bg, color: C.textHi, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" } },
-    h("div", { style: { background: C.panel, borderBottom: "1px solid " + C.border, position: "sticky", top: 0, zIndex: 100 } },
-      h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", gap: 0, flexWrap: "wrap" } },
-        h("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "14px 8px 14px 0", marginRight: 8 } },
-          h("div", { style: { width: 28, height: 28, borderRadius: 7, background: "linear-gradient(135deg," + C.green + "," + C.blue + ")", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#040810", fontWeight: 900 } }, "\u00A3"),
-          h("span", { style: { color: C.textHi, fontSize: 14, fontWeight: 700, letterSpacing: 0.5 } }, "FinPlan")
+    h("div", { ref: navRef, style: { background: C.panel, borderBottom: "1px solid " + C.border, position: "sticky", top: 0, zIndex: 100 } },
+      h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "0 16px" } },
+        h("div", { style: { display: "flex", alignItems: "center", gap: 0 } },
+          h("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "14px 8px 14px 0", marginRight: 8 } },
+            h("div", { style: { width: 28, height: 28, borderRadius: 7, background: "linear-gradient(135deg," + C.green + "," + C.blue + ")", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#040810", fontWeight: 900 } }, "\u00A3"),
+            compact ? null : h("span", { style: { color: C.textHi, fontSize: 14, fontWeight: 700, letterSpacing: 0.5 } }, "FinPlan")
+          ),
+          h("div", { style: { display: "flex", flex: 1, minWidth: 0 } }, navButtons),
+          compact ? null : h("div", { style: { display: "flex", gap: 16, fontSize: 11, fontFamily: "monospace", padding: "8px 0", whiteSpace: "nowrap" } },
+            h("span", { style: { color: C.textLo } }, "NET ", h("span", { style: { color: netWorth >= 0 ? C.green : C.red, fontWeight: 700 } }, gbp(netWorth, true))),
+            h("span", { style: { color: C.textLo } }, "CASH ", h(EditableCash, { value: data.cashBalance, onSave: function(v) { setData(d => Object.assign({}, d, { cashBalance: v })); } }))
+          )
         ),
-        h("div", { style: { display: "flex", flex: 1, overflowX: "auto" } }, navButtons),
-        h("div", { style: { display: "flex", gap: 16, fontSize: 11, fontFamily: "monospace", padding: "8px 0", whiteSpace: "nowrap" } },
-          h("span", { style: { color: C.textLo } }, "NET ", h("span", { style: { color: netWorth >= 0 ? C.green : C.red, fontWeight: 700 } }, gbp(netWorth, true))),
-          h("span", { style: { color: C.textLo } }, "CASH ", h(EditableCash, { value: data.cashBalance, onSave: function(v) { setData(d => Object.assign({}, d, { cashBalance: v })); } }))
-        )
+        compact ? h("div", { style: { display: "flex", gap: 16, fontSize: 11, fontFamily: "monospace", padding: "0 0 8px", whiteSpace: "nowrap", justifyContent: "center", borderTop: "1px solid " + C.border } },
+          h("span", { style: { color: C.textLo, paddingTop: 6 } }, "NET ", h("span", { style: { color: netWorth >= 0 ? C.green : C.red, fontWeight: 700 } }, gbp(netWorth, true))),
+          h("span", { style: { color: C.textLo, paddingTop: 6 } }, "CASH ", h(EditableCash, { value: data.cashBalance, onSave: function(v) { setData(d => Object.assign({}, d, { cashBalance: v })); } }))
+        ) : null
       )
     ),
     h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "24px 16px 60px" } }, pageContent),

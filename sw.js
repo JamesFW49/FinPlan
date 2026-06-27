@@ -1,6 +1,6 @@
 // Bump this version string whenever app.js or index.html changes, so old
 // caches get cleared and the update actually reaches the user.
-const CACHE = "finplan-v15";
+const CACHE = "finplan-v17";
 const ASSETS = [
   "./manifest.json",
   "./icon-192.png",
