@@ -1865,9 +1865,6 @@ function App() {
   const unlocked = unlockedState[0], setUnlocked = unlockedState[1];
   const pendingCloseState = useState(null); // month key awaiting close-out, or null
   const pendingClose = pendingCloseState[0], setPendingClose = pendingCloseState[1];
-  const navMeasured = useMeasuredWidth();
-  const navRef = navMeasured[0], navWidth = navMeasured[1];
-  const compact = navWidth < 640; // narrow phones: icon-only tabs, summary on its own row
 
   // Detect a new calendar month has started since we last recorded a "lastClosedMonth".
   // If so, prompt to close out the previous month once the app has unlocked.
@@ -1988,21 +1985,16 @@ function App() {
   const navButtons = PAGES.map(p =>
     h("button", {
       key: p.id, onClick: () => setPage(p.id),
-      title: compact ? p.label : undefined,
       style: {
         background: "none", border: "none",
         color: page === p.id ? C.green : C.textMid,
         borderBottom: page === p.id ? "2px solid " + C.green : "2px solid transparent",
-        padding: compact ? "14px 9px" : "16px 16px",
-        fontSize: compact ? 15 : 13, fontWeight: page === p.id ? 700 : 400,
+        padding: "16px 16px", fontSize: 13, fontWeight: page === p.id ? 700 : 400,
         cursor: "pointer", letterSpacing: 0.2,
         display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap",
-        flex: compact ? "1 1 0" : "0 0 auto",
-        justifyContent: "center",
       },
     },
-      h("span", { style: { fontSize: compact ? 16 : 11, opacity: compact ? 1 : 0.7 } }, p.icon),
-      compact ? null : p.label
+      h("span", { style: { fontSize: 11, opacity: 0.7 } }, p.icon), p.label
     )
   );
 
@@ -2019,23 +2011,17 @@ function App() {
   }
 
   return h("div", { style: { minHeight: "100vh", background: C.bg, color: C.textHi, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" } },
-    h("div", { ref: navRef, style: { background: C.panel, borderBottom: "1px solid " + C.border, position: "sticky", top: 0, zIndex: 100 } },
-      h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "0 16px" } },
-        h("div", { style: { display: "flex", alignItems: "center", gap: 0 } },
-          h("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "14px 8px 14px 0", marginRight: 8 } },
-            h("div", { style: { width: 28, height: 28, borderRadius: 7, background: "linear-gradient(135deg," + C.green + "," + C.blue + ")", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#040810", fontWeight: 900 } }, "\u00A3"),
-            compact ? null : h("span", { style: { color: C.textHi, fontSize: 14, fontWeight: 700, letterSpacing: 0.5 } }, "FinPlan")
-          ),
-          h("div", { style: { display: "flex", flex: 1, minWidth: 0 } }, navButtons),
-          compact ? null : h("div", { style: { display: "flex", gap: 16, fontSize: 11, fontFamily: "monospace", padding: "8px 0", whiteSpace: "nowrap" } },
-            h("span", { style: { color: C.textLo } }, "NET ", h("span", { style: { color: netWorth >= 0 ? C.green : C.red, fontWeight: 700 } }, gbp(netWorth, true))),
-            h("span", { style: { color: C.textLo } }, "CASH ", h(EditableCash, { value: data.cashBalance, onSave: function(v) { setData(d => Object.assign({}, d, { cashBalance: v })); } }))
-          )
+    h("div", { style: { background: C.panel, borderBottom: "1px solid " + C.border, position: "sticky", top: 0, zIndex: 100 } },
+      h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", gap: 0, flexWrap: "wrap" } },
+        h("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "14px 8px 14px 0", marginRight: 8 } },
+          h("div", { style: { width: 28, height: 28, borderRadius: 7, background: "linear-gradient(135deg," + C.green + "," + C.blue + ")", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, color: "#040810", fontWeight: 900 } }, "\u00A3"),
+          h("span", { style: { color: C.textHi, fontSize: 14, fontWeight: 700, letterSpacing: 0.5 } }, "FinPlan")
         ),
-        compact ? h("div", { style: { display: "flex", gap: 16, fontSize: 11, fontFamily: "monospace", padding: "0 0 8px", whiteSpace: "nowrap", justifyContent: "center", borderTop: "1px solid " + C.border } },
-          h("span", { style: { color: C.textLo, paddingTop: 6 } }, "NET ", h("span", { style: { color: netWorth >= 0 ? C.green : C.red, fontWeight: 700 } }, gbp(netWorth, true))),
-          h("span", { style: { color: C.textLo, paddingTop: 6 } }, "CASH ", h(EditableCash, { value: data.cashBalance, onSave: function(v) { setData(d => Object.assign({}, d, { cashBalance: v })); } }))
-        ) : null
+        h("div", { style: { display: "flex", flex: 1, overflowX: "auto" } }, navButtons),
+        h("div", { style: { display: "flex", gap: 16, fontSize: 11, fontFamily: "monospace", padding: "8px 0", whiteSpace: "nowrap" } },
+          h("span", { style: { color: C.textLo } }, "NET ", h("span", { style: { color: netWorth >= 0 ? C.green : C.red, fontWeight: 700 } }, gbp(netWorth, true))),
+          h("span", { style: { color: C.textLo } }, "CASH ", h(EditableCash, { value: data.cashBalance, onSave: function(v) { setData(d => Object.assign({}, d, { cashBalance: v })); } }))
+        )
       )
     ),
     h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "24px 16px 60px" } }, pageContent),

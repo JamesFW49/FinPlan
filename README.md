@@ -91,16 +91,6 @@ debt's payoff trajectory as its own colour-coded line, with a legend \u2014
 the same style as the Investments page already uses for individual
 holdings.
 
-## iPhone-friendly navigation
-
-On narrow phone screens, the top navigation automatically switches to
-icon-only tabs (no horizontal scrolling needed) and moves the Net
-Worth/Cash summary to its own row underneath, so every tab \u2014 Dashboard,
-Transactions, Debt, Investments, Future, Settings \u2014 is visible at once in
-portrait orientation without needing to rotate the phone. On wider screens
-(tablets, computers) the full labels and single-row layout remain as
-before.
-
 ## Interactive projection cards on Future and Debt
 
 On the Future page, both "Projected in Xyr" cards are tappable, each opening
