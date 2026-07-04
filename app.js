@@ -1147,7 +1147,12 @@ function Transactions(props) {
 
   function Row(t, colorAmt, type, onDel) {
     return h("tr", { key: t.id },
-      h("td", { style: { padding: "10px 8px", color: C.textMid, fontSize: 12, fontFamily: "monospace" } }, t.date),
+      h("td", { style: { padding: "10px 8px", color: C.textMid, fontSize: 12, fontFamily: "monospace" } }, (function() {
+        if (t.recur !== "monthly") return t.date;
+        var now = new Date();
+        var day = (t.date || "").slice(8, 10) || "01";
+        return now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0") + "-" + day;
+      })()),
       h("td", { style: { padding: "10px 8px", color: C.textHi } }, t.label),
       h("td", { style: { padding: "10px 8px" } }, pill(t.category, C.blue)),
       h("td", { style: { padding: "10px 8px" } }, recurPill(t.recur)),
@@ -1285,24 +1290,37 @@ function Debt(props) {
   const balanceAtYear = (fc60[debtCardYear * 12] || {}).debt;
   const balanceAtYearLabel = balanceAtYear === undefined ? "\u2014" : gbp(balanceAtYear, true);
 
-  const rows = data.debts.map(d =>
-    h("tr", { key: d.id },
+  const debtPending = isPendingThisMonth(data);
+  const debtLastConfirmed = data.lastClosedMonth ? monthKeyToLabel(data.lastClosedMonth) : "Never";
+
+  const rows = data.debts.map(d => {
+    const monthlyInterest = (d.balance * d.rate / 100) / 12;
+    const balanceReduction = d.payment - monthlyInterest;
+    return h("tr", { key: d.id },
       h("td", { style: { padding: "11px 10px", color: C.textHi, fontWeight: 500 } }, d.name),
       h("td", { style: { padding: "11px 10px", color: C.red, fontFamily: "monospace", fontWeight: 700, textAlign: "right" } }, gbp(d.balance)),
       h("td", { style: { padding: "11px 10px", color: C.textMid, fontFamily: "monospace", textAlign: "right" } }, d.rate + "%"),
       h("td", { style: { padding: "11px 10px", color: C.amber, fontFamily: "monospace", textAlign: "right" } }, gbp(d.payment)),
+      h("td", { style: { padding: "11px 10px", textAlign: "right" } },
+        debtPending
+          ? h("span", { style: { color: C.blue, fontFamily: "monospace", fontSize: 12, fontWeight: 600 } }, gbp(d.payment, true) + " pending")
+          : h("span", { style: { color: C.green, fontFamily: "monospace", fontSize: 12 } }, gbp(d.payment, true) + " \u2713")
+      ),
+      h("td", { style: { padding: "11px 10px", color: balanceReduction >= 0 ? C.green : C.red, fontFamily: "monospace", fontSize: 12, textAlign: "right" } },
+        (balanceReduction >= 0 ? "-" : "+") + gbp(Math.abs(balanceReduction), true)
+      ),
       h("td", { style: { padding: "11px 10px", color: C.textMid, fontFamily: "monospace", fontSize: 12, textAlign: "right" } }, gbp(totalInterest(d), true)),
       h("td", { style: { padding: "11px 10px", textAlign: "right" } }, pill(payoffETA(d), C.green)),
       h("td", { style: { padding: "11px 4px", textAlign: "right", whiteSpace: "nowrap" } },
         h(EditBtn, { onClick: () => openEdit(d) }),
         h(DelBtn, { onClick: () => del(d.id) })
       )
-    )
-  );
+    );
+  });
 
-  const headers = ["Debt", "Balance", "APR", "Monthly Payment", "Total Interest", "Payoff ETA", ""];
+  const headers = ["Debt", "Balance", "APR", "Monthly Payment", "This Month", "Balance \u2193", "Total Interest", "Payoff ETA", ""];
   const headerRow = h("tr", null, headers.map((hd, i) =>
-    h("th", { key: i, style: { padding: "8px 10px", color: C.textLo, fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", fontFamily: "monospace", fontWeight: 500, textAlign: (i >= 1 && i <= 5) ? "right" : "left", borderBottom: "1px solid " + C.border } }, hd)
+    h("th", { key: i, style: { padding: "8px 10px", color: C.textLo, fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", fontFamily: "monospace", fontWeight: 500, textAlign: (i >= 1 && i <= 7) ? "right" : "left", borderBottom: "1px solid " + C.border } }, hd)
   ));
 
   const modalContent = modal ? h(Modal, { title: editId ? "Edit Debt" : "Add Debt", onClose: () => { setModal(false); setEditId(null); } },
@@ -1349,12 +1367,15 @@ function Debt(props) {
     h(Panel, null,
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
         h(PanelTitle, null, "Debts"),
-        h(AddBtn, { label: "Add Debt", onClick: openAdd })
+        h("div", { style: { display: "flex", alignItems: "center", gap: 12 } },
+          h("span", { style: { color: C.textLo, fontSize: 11, fontFamily: "monospace" } }, "Balances as at: " + debtLastConfirmed),
+          h(AddBtn, { label: "Add Debt", onClick: openAdd })
+        )
       ),
       h("div", { style: { overflowX: "auto" } },
         h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 13 } },
           h("thead", null, headerRow),
-          h("tbody", null, data.debts.length === 0 ? h("tr", null, h("td", { colSpan: 7, style: { color: C.textLo, padding: "20px 10px", textAlign: "center" } }, "No debts tracked.")) : null, rows)
+          h("tbody", null, data.debts.length === 0 ? h("tr", null, h("td", { colSpan: 9, style: { color: C.textLo, padding: "20px 10px", textAlign: "center" } }, "No debts tracked.")) : null, rows)
         )
       )
     ),
@@ -1429,9 +1450,12 @@ function Investments(props) {
 
   const TYPE_COLORS = { Stocks: C.green, Savings: C.blue, Pension: C.amber, Crypto: C.purple, Bonds: C.textMid, Property: "#F97316", Other: C.red };
 
-  const headers = ["Holding", "Type", "Current Value", "Monthly Add", "Exp. Return", projYears + "yr Projection", ""];
+  const lastConfirmed = data.lastClosedMonth ? monthKeyToLabel(data.lastClosedMonth) : "Never";
+  const pending = isPendingThisMonth(data);
+
+  const headers = ["Holding", "Type", "Current Value", "Monthly Add", "This Month", "Exp. Return", projYears + "yr Projection", ""];
   const headerRow = h("tr", null, headers.map((hd, i) =>
-    h("th", { key: i, style: { padding: "8px 10px", color: C.textLo, fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", fontFamily: "monospace", fontWeight: 500, textAlign: (i >= 2 && i <= 5) ? "right" : "left", borderBottom: "1px solid " + C.border } }, hd)
+    h("th", { key: i, style: { padding: "8px 10px", color: C.textLo, fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", fontFamily: "monospace", fontWeight: 500, textAlign: (i >= 2 && i <= 6) ? "right" : "left", borderBottom: "1px solid " + C.border } }, hd)
   ));
 
   const rows = data.investments.map((inv) =>
@@ -1440,6 +1464,11 @@ function Investments(props) {
       h("td", { style: { padding: "11px 10px" } }, pill(inv.type, TYPE_COLORS[inv.type] || C.textMid)),
       h("td", { style: { padding: "11px 10px", color: C.amber, fontFamily: "monospace", fontWeight: 700, textAlign: "right" } }, gbp(inv.value)),
       h("td", { style: { padding: "11px 10px", color: C.green, fontFamily: "monospace", textAlign: "right" } }, gbp(inv.contrib)),
+      h("td", { style: { padding: "11px 10px", textAlign: "right" } },
+        pending
+          ? h("span", { style: { color: C.blue, fontFamily: "monospace", fontSize: 12, fontWeight: 600 } }, gbp(inv.contrib, true) + " pending")
+          : h("span", { style: { color: C.green, fontFamily: "monospace", fontSize: 12 } }, gbp(inv.contrib, true) + " \u2713")
+      ),
       h("td", { style: { padding: "11px 10px", color: C.textMid, fontFamily: "monospace", textAlign: "right" } }, inv.returnPct + "%"),
       h("td", { style: { padding: "11px 10px", color: C.purple, fontFamily: "monospace", fontWeight: 700, textAlign: "right" } }, gbp(projVal(inv), true)),
       h("td", { style: { padding: "11px 4px", textAlign: "right", whiteSpace: "nowrap" } },
@@ -1488,12 +1517,15 @@ function Investments(props) {
     h(Panel, null,
       h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
         h(PanelTitle, null, "Holdings"),
-        h(AddBtn, { label: "Add Holding", onClick: openAdd })
+        h("div", { style: { display: "flex", alignItems: "center", gap: 12 } },
+          h("span", { style: { color: C.textLo, fontSize: 11, fontFamily: "monospace" } }, "Values as at: " + lastConfirmed),
+          h(AddBtn, { label: "Add Holding", onClick: openAdd })
+        )
       ),
       h("div", { style: { overflowX: "auto" } },
         h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 13 } },
           h("thead", null, headerRow),
-          h("tbody", null, data.investments.length === 0 ? h("tr", null, h("td", { colSpan: 7, style: { color: C.textLo, padding: "20px 10px", textAlign: "center" } }, "No holdings yet.")) : null, rows)
+          h("tbody", null, data.investments.length === 0 ? h("tr", null, h("td", { colSpan: 8, style: { color: C.textLo, padding: "20px 10px", textAlign: "center" } }, "No holdings yet.")) : null, rows)
         )
       )
     ),
@@ -2029,7 +2061,12 @@ function App() {
   // month so the confirmation modal opens immediately on demand, not just
   // when a new month is detected on app open.
   const triggerConfirm = useCallback(() => {
-    setPendingClose(data.lastClosedMonth || currentMonthKey());
+    // For a manual confirm, always use the current month — even if it's
+    // already been closed, let the user re-confirm with updated actuals.
+    var nowKey = currentMonthKey();
+    var lastClosed = data.lastClosedMonth || "";
+    // Set to the most recent unclosed month, or current month if all closed
+    setPendingClose(lastClosed < nowKey ? lastClosed : nowKey);
   }, [data.lastClosedMonth]);
 
   // Save locally on every change
@@ -2134,7 +2171,7 @@ function App() {
   }
 
   return h("div", { style: { minHeight: "100vh", background: C.bg, color: C.textHi, fontFamily: "'Inter','Segoe UI',system-ui,sans-serif" } },
-    h("div", { style: { background: C.panel, borderBottom: "1px solid " + C.border, position: "sticky", top: 0, zIndex: 100 } },
+    h("div", { style: { background: C.panel, borderBottom: "1px solid " + C.border, position: "sticky", top: 0, zIndex: 100, paddingTop: "env(safe-area-inset-top)" } },
       h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "0 16px", display: "flex", alignItems: "center", gap: 0, flexWrap: "wrap" } },
         h("div", { style: { display: "flex", alignItems: "center", gap: 10, padding: "14px 8px 14px 0", marginRight: 8 } },
           h("img", { src: "icon-192.png", style: { width: 32, height: 32, borderRadius: 8 } }),
@@ -2147,7 +2184,7 @@ function App() {
         )
       )
     ),
-    h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "24px 16px 60px" } }, pageContent),
+    h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "24px 16px calc(60px + env(safe-area-inset-bottom))" } }, pageContent),
     pendingClose ? h(MonthCloseModal, {
       monthKey: pendingClose,
       onClose: closeMonth,
