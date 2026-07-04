@@ -200,6 +200,21 @@ function monthProgress() {
   return { day: dayOfMonth, total: daysInMonth, frac: dayOfMonth / daysInMonth };
 }
 
+// Whether the current month's contributions/payments are still pending confirmation.
+// Pending = we're inside a month that hasn't been closed out yet.
+// Confirmed = lastClosedMonth matches the current calendar month.
+function isPendingThisMonth(data) {
+  var nowKey = currentMonthKey();
+  var lastClosed = (data && data.lastClosedMonth) || "";
+  return lastClosed < nowKey; // not yet confirmed this month
+}
+
+function daysLeftInMonth() {
+  var now = new Date();
+  var daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  return daysInMonth - now.getDate();
+}
+
 // ─── PERSISTENCE ──────────────────────────────────────────────────────────────
 const STORAGE_KEY = "finplan-data-v1";
 
@@ -707,6 +722,40 @@ function AddBtn(props) {
   }, "+ " + props.label);
 }
 
+// Pending/Confirmed status card for monthly contributions.
+// Shows "Pending" from the 1st until month-end confirmation, highlights
+// amber in the last 5 days as a reminder, and flips to "Confirmed ✓"
+// once the month has been closed out.
+function PendingCard(props) {
+  var label = props.label;       // e.g. "Investments" or "Debt Payments"
+  var amount = props.amount;     // monthly total (£)
+  var pending = props.pending;   // true = not yet confirmed this month
+  var daysLeft = daysLeftInMonth();
+  var urgent = pending && daysLeft <= 5;
+  var accent = !pending ? C.green : urgent ? C.amber : C.blue;
+  var statusLabel = !pending ? "Confirmed \u2713" : urgent ? "Due in " + daysLeft + " day" + (daysLeft === 1 ? "" : "s") : "Pending";
+  var statusIcon = !pending ? "\u2713" : urgent ? "\u23F0" : "\u29D7";
+
+  return h("div", {
+    style: {
+      background: C.panel,
+      border: "1px solid " + (urgent ? C.amber + "66" : C.border),
+      borderRadius: 10,
+      padding: "18px 20px",
+      display: "flex", flexDirection: "column", gap: 6,
+      borderTop: "2px solid " + accent,
+    },
+  },
+    h("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "flex-start" } },
+      h("span", { style: { color: C.textMid, fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase", fontFamily: "monospace" } }, label),
+      h("span", { style: { fontSize: 18, opacity: 0.7 } }, statusIcon)
+    ),
+    h("span", { style: { color: accent, fontSize: 24, fontWeight: 700, fontFamily: "monospace", letterSpacing: -0.5 } }, gbp(amount, true)),
+    h("span", { style: { color: accent, fontSize: 12, fontWeight: 600 } }, statusLabel),
+    h("span", { style: { color: C.textLo, fontSize: 11 } }, pending ? "This month\u2019s " + label.toLowerCase() + " not yet confirmed" : "Confirmed for " + monthKeyToLabel(currentMonthKey()))
+  );
+}
+
 function DelBtn(props) {
   return h("button", {
     onClick: props.onClick,
@@ -912,6 +961,11 @@ function Dashboard(props) {
       h(KPICard, { label: "Investments", value: gbp(totalInv, true), sub: "+" + gbp(fc12end.investments - totalInv, true) + " in 12mo \u2014 tap to view", accent: C.amber, icon: "\u2197", linkTo: "investments", onNavigate: onNavigate }),
       h(KPICard, { label: "Total Debt", value: gbp(totalDebt, true), sub: gbp(Math.max(0, totalDebt - fc12end.debt), true) + " cleared in 12mo \u2014 tap to view", accent: C.red, icon: "\u2198", linkTo: "debt", onNavigate: onNavigate }),
       h(KPICard, { label: "Monthly Surplus", value: gbp(mFlow, true), sub: (mFlow >= 0 ? "After all commitments" : "Shortfall \u2014 review expenses") + " \u2014 tap to view", accent: mFlow >= 0 ? C.green : C.red, icon: "\u2192", linkTo: "transactions", onNavigate: onNavigate })
+    ),
+
+    h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 } },
+      h(PendingCard, { label: "Investments", amount: mInvest, pending: isPendingThisMonth(data) }),
+      h(PendingCard, { label: "Debt Payments", amount: mDebtPay, pending: isPendingThisMonth(data) })
     ),
 
     h(Panel, null,
@@ -1241,6 +1295,7 @@ function Debt(props) {
             onClick: () => setShowDebtYearPicker(true),
           })
     ),
+    h(PendingCard, { label: "Debt Payments", amount: totalPay, pending: isPendingThisMonth(data) }),
     h(Panel, null,
       h(PanelTitle, null, "Debt paydown \u2014 60-month projection (total)"),
       h(MiniChart, { data: fc60, height: 220, xLabelEvery: 8, yFormatter: v => gbp(v, true), series: [{ key: "debt", color: C.red, type: "area", name: "Total Debt" }] })
@@ -1390,6 +1445,7 @@ function Investments(props) {
         onClick: () => setShowYearPicker(true),
       })
     ),
+    h(PendingCard, { label: "Investments", amount: totalContrib, pending: isPendingThisMonth(data) }),
     h(Panel, null,
       h(PanelTitle, null, projYears + "-year investment forecast \u2014 by holding"),
       h(MiniChart, { data: invChartRows, height: 250, xLabelEvery: Math.max(1, Math.round(invChartRows.length / 8)), yFormatter: v => gbp(v, true), series: data.investments.map((inv, i) => ({ key: inv.name, color: invColors[i % invColors.length], type: "line", name: inv.name })) }),
