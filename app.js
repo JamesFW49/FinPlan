@@ -727,21 +727,49 @@ function AddBtn(props) {
 // amber in the last 5 days as a reminder, and flips to "Confirmed ✓"
 // once the month has been closed out.
 function PendingCard(props) {
-  var label = props.label;       // e.g. "Investments" or "Debt Payments"
-  var amount = props.amount;     // monthly total (£)
-  var pending = props.pending;   // true = not yet confirmed this month
+  var label = props.label;
+  var amount = props.amount;
+  var pending = props.pending;
+  var onEdit = props.onEdit; // optional: called with new amount when user edits
   var daysLeft = daysLeftInMonth();
   var urgent = pending && daysLeft <= 5;
   var accent = !pending ? C.green : urgent ? C.amber : C.blue;
   var statusLabel = !pending ? "Confirmed \u2713" : urgent ? "Due in " + daysLeft + " day" + (daysLeft === 1 ? "" : "s") : "Pending";
   var statusIcon = !pending ? "\u2713" : urgent ? "\u23F0" : "\u29D7";
 
+  var editingState = useState(false);
+  var editing = editingState[0], setEditing = editingState[1];
+  var draftState = useState(String(amount));
+  var draft = draftState[0], setDraft = draftState[1];
+
+  var commit = function() {
+    var v = parseFloat(draft);
+    if (!isNaN(v) && onEdit) onEdit(v);
+    setEditing(false);
+  };
+
+  var amountNode = (pending && onEdit)
+    ? (editing
+        ? h("input", {
+            type: "number", autoFocus: true, value: draft,
+            onChange: function(e) { setDraft(e.target.value); },
+            onBlur: commit,
+            onKeyDown: function(e) { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); },
+            style: { background: C.panelBright, border: "1px solid " + accent, borderRadius: 6, color: accent, fontSize: 22, fontWeight: 700, fontFamily: "monospace", padding: "2px 6px", width: "100%", boxSizing: "border-box" },
+          })
+        : h("span", {
+            onClick: function() { setDraft(String(amount)); setEditing(true); },
+            title: "Tap to adjust planned amount",
+            style: { color: accent, fontSize: 24, fontWeight: 700, fontFamily: "monospace", letterSpacing: -0.5, cursor: "pointer", borderBottom: "1px dotted " + accent },
+          }, gbp(amount, true))
+      )
+    : h("span", { style: { color: accent, fontSize: 24, fontWeight: 700, fontFamily: "monospace", letterSpacing: -0.5 } }, gbp(amount, true));
+
   return h("div", {
     style: {
       background: C.panel,
       border: "1px solid " + (urgent ? C.amber + "66" : C.border),
-      borderRadius: 10,
-      padding: "18px 20px",
+      borderRadius: 10, padding: "18px 20px",
       display: "flex", flexDirection: "column", gap: 6,
       borderTop: "2px solid " + accent,
     },
@@ -750,9 +778,13 @@ function PendingCard(props) {
       h("span", { style: { color: C.textMid, fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase", fontFamily: "monospace" } }, label),
       h("span", { style: { fontSize: 18, opacity: 0.7 } }, statusIcon)
     ),
-    h("span", { style: { color: accent, fontSize: 24, fontWeight: 700, fontFamily: "monospace", letterSpacing: -0.5 } }, gbp(amount, true)),
+    amountNode,
     h("span", { style: { color: accent, fontSize: 12, fontWeight: 600 } }, statusLabel),
-    h("span", { style: { color: C.textLo, fontSize: 11 } }, pending ? "This month\u2019s " + label.toLowerCase() + " not yet confirmed" : "Confirmed for " + monthKeyToLabel(currentMonthKey()))
+    h("span", { style: { color: C.textLo, fontSize: 11 } },
+      pending
+        ? (onEdit ? "Tap amount to adjust \u2014 not yet confirmed" : "This month\u2019s " + label.toLowerCase() + " not yet confirmed")
+        : "Confirmed for " + monthKeyToLabel(currentMonthKey())
+    )
   );
 }
 
@@ -870,23 +902,40 @@ function SaveBtn(props) {
 // cash was actually saved last month — and logs it to permanent history.
 function MonthCloseModal(props) {
   var monthKey = props.monthKey, onSubmit = props.onClose;
+  var plannedInvest = props.plannedInvest || 0;
+  var plannedDebt = props.plannedDebt || 0;
+
   var savedState = useState("");
   var saved = savedState[0], setSaved = savedState[1];
+  var actualInvestState = useState(String(plannedInvest));
+  var actualInvest = actualInvestState[0], setActualInvest = actualInvestState[1];
+  var actualDebtState = useState(String(plannedDebt));
+  var actualDebt = actualDebtState[0], setActualDebt = actualDebtState[1];
 
   var submit = function() {
-    var v = parseFloat(saved);
-    if (isNaN(v)) { alert("Enter a number (use 0 if you didn't save anything, or a negative number if you went over)."); return; }
-    onSubmit(v);
+    var vSaved = parseFloat(saved);
+    var vInvest = parseFloat(actualInvest);
+    var vDebt = parseFloat(actualDebt);
+    if (isNaN(vSaved)) { alert("Enter how much cash you saved (use 0 if none, negative if you overspent)."); return; }
+    if (isNaN(vInvest)) { alert("Enter the actual total invested this month."); return; }
+    if (isNaN(vDebt)) { alert("Enter the actual total debt payments made this month."); return; }
+    onSubmit({ savedAmount: vSaved, actualInvest: vInvest, actualDebt: vDebt });
   };
 
   return h(Modal, { title: "How did " + monthKeyToLabel(monthKey) + " go?", onClose: function() { onSubmit(null); } },
     h("div", { style: { color: C.textMid, fontSize: 13, lineHeight: 1.7, marginBottom: 16 } },
-      "A new month has started. How much cash did you actually save from your salary in ", monthKeyToLabel(monthKey), "? This gets added to your cash balance and logged in your history. Your investments and debts will also move forward by one month \u2014 growth and contributions applied to investments, payments and interest applied to debts."
+      "A new month has started. Confirm what actually happened in ", monthKeyToLabel(monthKey), ". Pre-filled with your planned amounts \u2014 adjust if the actuals were different."
     ),
-    h(FRow, { label: "Cash actually saved (\u00A3) \u2014 use a negative number if you overspent" },
+    h(FRow, { label: "Cash actually saved (\u00A3) \u2014 negative if you overspent" },
       h("input", { style: inp, type: "number", placeholder: "e.g. 850", value: saved, onChange: e => setSaved(e.target.value), autoFocus: true })
     ),
-    h(SaveBtn, { onClick: submit, label: "Log it" }),
+    h(FRow, { label: "Total invested this month (\u00A3)" },
+      h("input", { style: inp, type: "number", value: actualInvest, onChange: e => setActualInvest(e.target.value) })
+    ),
+    h(FRow, { label: "Total debt payments made (\u00A3)" },
+      h("input", { style: inp, type: "number", value: actualDebt, onChange: e => setActualDebt(e.target.value) })
+    ),
+    h(SaveBtn, { onClick: submit, label: "Confirm this month" }),
     h("button", {
       onClick: function() { onSubmit(null); },
       style: { width: "100%", background: "transparent", border: "none", color: C.textLo, padding: "10px", fontSize: 12, cursor: "pointer", marginTop: 4 },
@@ -904,8 +953,14 @@ function Dashboard(props) {
   const mDebtPay = data.debts.reduce((s, x) => s + x.payment, 0);
   const mInvest = data.investments.reduce((s, x) => s + x.contrib, 0);
   const mFlow = mIncome - mExpenses - mDebtPay - mInvest;
-  const totalDebt = data.debts.reduce((s, x) => s + x.balance, 0);
-  const totalInv = data.investments.reduce((s, x) => s + x.value, 0);
+
+  // When this month is pending (not yet confirmed), adjust totals to include
+  // this month's committed contributions and payments so the numbers feel live.
+  const pending = isPendingThisMonth(data);
+  const totalInvRaw = data.investments.reduce((s, x) => s + x.value, 0);
+  const totalDebtRaw = data.debts.reduce((s, x) => s + x.balance, 0);
+  const totalInv = pending ? totalInvRaw + mInvest : totalInvRaw;
+  const totalDebt = pending ? Math.max(0, totalDebtRaw - mDebtPay) : totalDebtRaw;
   const netWorth = data.cashBalance + totalInv - totalDebt;
 
   const catMap = {};
@@ -964,8 +1019,8 @@ function Dashboard(props) {
     ),
 
     h("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12 } },
-      h(PendingCard, { label: "Investments", amount: mInvest, pending: isPendingThisMonth(data) }),
-      h(PendingCard, { label: "Debt Payments", amount: mDebtPay, pending: isPendingThisMonth(data) })
+      h(PendingCard, { label: "Investments", amount: mInvest, pending: pending }),
+      h(PendingCard, { label: "Debt Payments", amount: mDebtPay, pending: pending })
     ),
 
     h(Panel, null,
@@ -1933,13 +1988,13 @@ function App() {
     }
   }, [unlocked]);
 
-  const closeMonth = (savedAmount) => {
+  const closeMonth = (result) => {
     var monthKey = pendingClose;
     setPendingClose(null);
-    if (savedAmount === null) {
-      // "Skip for now" — don't advance lastClosedMonth, so we ask again next open.
-      return;
-    }
+    if (result === null) return; // skipped
+    var savedAmount = result.savedAmount;
+    var actualInvest = result.actualInvest;
+    var actualDebt = result.actualDebt;
     setData(d => {
       var entry = { month: monthKey, savedAmount: savedAmount, loggedAt: todayStr() };
       var history = (d.monthlyHistory || []).filter(h => h.month !== monthKey).concat([entry]);
@@ -1947,13 +2002,39 @@ function App() {
 
       var nowKey = currentMonthKey();
       var elapsed = Math.max(1, monthsBetween(monthKey, nowKey));
-      var debts = d.debts.map(x => Object.assign({}, x));
-      var investments = d.investments.map(x => Object.assign({}, x));
-      for (var i = 0; i < elapsed; i++) {
-        var advanced = advanceOneMonth(debts, investments);
-        debts = advanced.debts;
-        investments = advanced.investments;
-      }
+
+      // Apply actual investment amounts: grow by return rate, then add actual contribution
+      // (scaled proportionally across each holding if there are multiple)
+      var totalPlannedContrib = d.investments.reduce(function(s, x) { return s + x.contrib; }, 0);
+      var investments = d.investments.map(function(x) {
+        var newVal = x.value;
+        for (var i = 0; i < elapsed; i++) {
+          // Apply growth for each elapsed month
+          newVal = newVal * (1 + x.returnPct / 100 / 12);
+          // On the last month, apply actual contribution (proportional to planned)
+          if (i === elapsed - 1) {
+            var share = totalPlannedContrib > 0 ? x.contrib / totalPlannedContrib : 1 / d.investments.length;
+            newVal += actualInvest * share;
+          } else {
+            newVal += x.contrib;
+          }
+        }
+        return Object.assign({}, x, { value: Math.round(newVal) });
+      });
+
+      // Apply actual debt payments: interest + actual payment (proportional to planned)
+      var totalPlannedPayment = d.debts.reduce(function(s, x) { return s + x.payment; }, 0);
+      var debts = d.debts.map(function(x) {
+        var bal = x.balance;
+        for (var i = 0; i < elapsed; i++) {
+          var interest = (bal * x.rate / 100) / 12;
+          var payment = i === elapsed - 1
+            ? (totalPlannedPayment > 0 ? actualDebt * (x.payment / totalPlannedPayment) : actualDebt)
+            : x.payment;
+          bal = Math.max(0, bal + interest - payment);
+        }
+        return Object.assign({}, x, { balance: Math.round(bal * 100) / 100 });
+      });
 
       return Object.assign({}, d, {
         cashBalance: d.cashBalance + savedAmount,
@@ -2081,7 +2162,12 @@ function App() {
       )
     ),
     h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "24px 16px 60px" } }, pageContent),
-    pendingClose ? h(MonthCloseModal, { monthKey: pendingClose, onClose: closeMonth }) : null
+    pendingClose ? h(MonthCloseModal, {
+      monthKey: pendingClose,
+      onClose: closeMonth,
+      plannedInvest: data.investments.reduce(function(s, x) { return s + x.contrib; }, 0),
+      plannedDebt: data.debts.reduce(function(s, x) { return s + x.payment; }, 0),
+    }) : null
   );
 }
 
