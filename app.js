@@ -1080,7 +1080,35 @@ function Dashboard(props) {
         data: history.map(function(m) { return { label: monthKeyToLabel(m.month).slice(0, 3) + " '" + monthKeyToLabel(m.month).slice(-2), value: m.savedAmount, fill: m.savedAmount >= 0 ? C.green : C.red }; }),
         height: 180, yFormatter: v => gbp(v, true),
       })
-    ) : null
+    ) : null,
+
+    history.filter(function(m){ return m.netWorth !== undefined; }).length > 1
+      ? h(Panel, null,
+          h(PanelTitle, null, "Net worth history \u2014 confirmed each month"),
+          h("div", { style: { color: C.textLo, fontSize: 12, marginBottom: 14 } },
+            "Your actual confirmed net worth at the end of each month. This is your real wealth trajectory, not a forecast."
+          ),
+          h(MiniChart, {
+            data: history
+              .filter(function(m){ return m.netWorth !== undefined; })
+              .map(function(m){ return {
+                label: monthKeyToLabel(m.month).slice(0,3) + " '" + monthKeyToLabel(m.month).slice(-2),
+                netWorth: m.netWorth
+              };}),
+            height: 220,
+            xLabelEvery: Math.max(1, Math.round(history.filter(function(m){return m.netWorth!==undefined;}).length / 8)),
+            yFormatter: function(v){ return gbp(v, true); },
+            series: [{ key: "netWorth", color: C.green, type: "area", name: "Net Worth" }]
+          })
+        )
+      : history.length > 0 && history.filter(function(m){ return m.netWorth !== undefined; }).length <= 1
+        ? h(Panel, null,
+            h(PanelTitle, null, "Net worth history \u2014 confirmed each month"),
+            h("div", { style: { color: C.textLo, fontSize: 13, padding: "8px 0" } },
+              "Confirm at least 2 months to see your net worth history chart build up here."
+            )
+          )
+        : null
   );
 }
 
@@ -2007,7 +2035,9 @@ function App() {
     var actualInvest = result.actualInvest;
     var actualDebt = result.actualDebt;
     setData(d => {
-      var entry = { month: monthKey, savedAmount: savedAmount, loggedAt: todayStr() };
+      var entry = { month: monthKey, savedAmount: savedAmount, loggedAt: todayStr(),
+        netWorth: Math.round((d.cashBalance + savedAmount) + investments.reduce(function(s,x){return s+x.value;},0) - debts.reduce(function(s,x){return s+x.balance;},0)
+      )};
       var history = (d.monthlyHistory || []).filter(h => h.month !== monthKey).concat([entry]);
       history.sort((a, b) => a.month < b.month ? -1 : 1);
 
@@ -2177,11 +2207,7 @@ function App() {
           h("img", { src: "icon-192.png", style: { width: 32, height: 32, borderRadius: 8 } }),
           h("span", { style: { color: C.textHi, fontSize: 14, fontWeight: 700, letterSpacing: 0.5 } }, "FinPlan")
         ),
-        h("div", { style: { display: "flex", flex: 1, overflowX: "auto" } }, navButtons),
-        h("div", { style: { display: "flex", gap: 16, fontSize: 11, fontFamily: "monospace", padding: "8px 0", whiteSpace: "nowrap" } },
-          h("span", { style: { color: C.textLo } }, "NET ", h("span", { style: { color: netWorth >= 0 ? C.green : C.red, fontWeight: 700 } }, gbp(netWorth, true))),
-          h("span", { style: { color: C.textLo } }, "CASH ", h(EditableCash, { value: data.cashBalance, onSave: function(v) { setData(d => Object.assign({}, d, { cashBalance: v })); } }))
-        )
+        h("div", { style: { display: "flex", flex: 1, overflowX: "auto" } }, navButtons)
       )
     ),
     h("div", { style: { maxWidth: 1200, margin: "0 auto", padding: "24px 16px calc(60px + env(safe-area-inset-bottom))" } }, pageContent),
