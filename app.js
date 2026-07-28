@@ -1325,7 +1325,15 @@ function Debt(props) {
     const monthlyInterest = (d.balance * d.rate / 100) / 12;
     const balanceReduction = d.payment - monthlyInterest;
     return h("tr", { key: d.id },
-      h("td", { style: { padding: "11px 10px", color: C.textHi, fontWeight: 500 } }, d.name),
+      h("td", { style: { padding: "11px 10px" } },
+        h("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+          h("span", { style: { color: C.textHi, fontWeight: 500 } }, d.name),
+          h("div", { style: { display: "flex", gap: 2 } },
+            h(EditBtn, { onClick: () => openEdit(d) }),
+            h(DelBtn, { onClick: () => del(d.id) })
+          )
+        )
+      ),
       h("td", { style: { padding: "11px 10px", color: C.red, fontFamily: "monospace", fontWeight: 700, textAlign: "right" } }, gbp(d.balance)),
       h("td", { style: { padding: "11px 10px", color: C.textMid, fontFamily: "monospace", textAlign: "right" } }, d.rate + "%"),
       h("td", { style: { padding: "11px 10px", color: C.amber, fontFamily: "monospace", textAlign: "right" } }, gbp(d.payment)),
@@ -1338,15 +1346,11 @@ function Debt(props) {
         (balanceReduction >= 0 ? "-" : "+") + gbp(Math.abs(balanceReduction), true)
       ),
       h("td", { style: { padding: "11px 10px", color: C.textMid, fontFamily: "monospace", fontSize: 12, textAlign: "right" } }, gbp(totalInterest(d), true)),
-      h("td", { style: { padding: "11px 10px", textAlign: "right" } }, pill(payoffETA(d), C.green)),
-      h("td", { style: { padding: "11px 4px", textAlign: "right", whiteSpace: "nowrap" } },
-        h(EditBtn, { onClick: () => openEdit(d) }),
-        h(DelBtn, { onClick: () => del(d.id) })
-      )
+      h("td", { style: { padding: "11px 10px", textAlign: "right" } }, pill(payoffETA(d), C.green))
     );
   });
 
-  const headers = ["Debt", "Balance", "APR", "Monthly Payment", "This Month", "Balance \u2193", "Total Interest", "Payoff ETA", ""];
+  const headers = ["Debt", "Balance", "APR", "Monthly Payment", "This Month", "Balance \u2193", "Total Interest", "Payoff ETA"];
   const headerRow = h("tr", null, headers.map((hd, i) =>
     h("th", { key: i, style: { padding: "8px 10px", color: C.textLo, fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", fontFamily: "monospace", fontWeight: 500, textAlign: (i >= 1 && i <= 7) ? "right" : "left", borderBottom: "1px solid " + C.border } }, hd)
   ));
@@ -1403,7 +1407,7 @@ function Debt(props) {
       h("div", { style: { overflowX: "auto" } },
         h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 13 } },
           h("thead", null, headerRow),
-          h("tbody", null, data.debts.length === 0 ? h("tr", null, h("td", { colSpan: 9, style: { color: C.textLo, padding: "20px 10px", textAlign: "center" } }, "No debts tracked.")) : null, rows)
+          h("tbody", null, data.debts.length === 0 ? h("tr", null, h("td", { colSpan: 8, style: { color: C.textLo, padding: "20px 10px", textAlign: "center" } }, "No debts tracked.")) : null, rows)
         )
       )
     ),
@@ -1481,14 +1485,22 @@ function Investments(props) {
   const lastConfirmed = data.lastClosedMonth ? monthKeyToLabel(data.lastClosedMonth) : "Never";
   const pending = isPendingThisMonth(data);
 
-  const headers = ["Holding", "Type", "Current Value", "Monthly Add", "This Month", "Exp. Return", projYears + "yr Projection", ""];
+  const headers = ["Holding", "Type", "Current Value", "Monthly Add", "This Month", "Exp. Return", projYears + "yr Projection"];
   const headerRow = h("tr", null, headers.map((hd, i) =>
     h("th", { key: i, style: { padding: "8px 10px", color: C.textLo, fontSize: 11, letterSpacing: 0.8, textTransform: "uppercase", fontFamily: "monospace", fontWeight: 500, textAlign: (i >= 2 && i <= 6) ? "right" : "left", borderBottom: "1px solid " + C.border } }, hd)
   ));
 
   const rows = data.investments.map((inv) =>
     h("tr", { key: inv.id },
-      h("td", { style: { padding: "11px 10px", color: C.textHi, fontWeight: 500 } }, inv.name),
+      h("td", { style: { padding: "11px 10px" } },
+        h("div", { style: { display: "flex", alignItems: "center", gap: 8 } },
+          h("span", { style: { color: C.textHi, fontWeight: 500 } }, inv.name),
+          h("div", { style: { display: "flex", gap: 2 } },
+            h(EditBtn, { onClick: () => openEdit(inv) }),
+            h(DelBtn, { onClick: () => del(inv.id) })
+          )
+        )
+      ),
       h("td", { style: { padding: "11px 10px" } }, pill(inv.type, TYPE_COLORS[inv.type] || C.textMid)),
       h("td", { style: { padding: "11px 10px", color: C.amber, fontFamily: "monospace", fontWeight: 700, textAlign: "right" } }, gbp(inv.value)),
       h("td", { style: { padding: "11px 10px", color: C.green, fontFamily: "monospace", textAlign: "right" } }, gbp(inv.contrib)),
@@ -1498,11 +1510,7 @@ function Investments(props) {
           : h("span", { style: { color: C.green, fontFamily: "monospace", fontSize: 12 } }, gbp(inv.contrib, true) + " \u2713")
       ),
       h("td", { style: { padding: "11px 10px", color: C.textMid, fontFamily: "monospace", textAlign: "right" } }, inv.returnPct + "%"),
-      h("td", { style: { padding: "11px 10px", color: C.purple, fontFamily: "monospace", fontWeight: 700, textAlign: "right" } }, gbp(projVal(inv), true)),
-      h("td", { style: { padding: "11px 4px", textAlign: "right", whiteSpace: "nowrap" } },
-        h(EditBtn, { onClick: () => openEdit(inv) }),
-        h(DelBtn, { onClick: () => del(inv.id) })
-      )
+      h("td", { style: { padding: "11px 10px", color: C.purple, fontFamily: "monospace", fontWeight: 700, textAlign: "right" } }, gbp(projVal(inv), true))
     )
   );
 
@@ -1553,7 +1561,7 @@ function Investments(props) {
       h("div", { style: { overflowX: "auto" } },
         h("table", { style: { width: "100%", borderCollapse: "collapse", fontSize: 13 } },
           h("thead", null, headerRow),
-          h("tbody", null, data.investments.length === 0 ? h("tr", null, h("td", { colSpan: 8, style: { color: C.textLo, padding: "20px 10px", textAlign: "center" } }, "No holdings yet.")) : null, rows)
+          h("tbody", null, data.investments.length === 0 ? h("tr", null, h("td", { colSpan: 7, style: { color: C.textLo, padding: "20px 10px", textAlign: "center" } }, "No holdings yet.")) : null, rows)
         )
       )
     ),
